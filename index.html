@@ -616,17 +616,18 @@
     for(const it of items){
       ctx.save();
       ctx.translate(it.x,it.y);
-      // soft white glow so the light-colored treats pop on the pink
-      const g = ctx.createRadialGradient(0,0,0,0,0,it.size*0.75);
-      g.addColorStop(0,"rgba(255,255,255,.75)");
-      g.addColorStop(.6,"rgba(255,255,255,.35)");
-      g.addColorStop(1,"rgba(255,255,255,0)");
-      ctx.fillStyle=g;
-      ctx.beginPath(); ctx.arc(0,0,it.size*0.75,0,Math.PI*2); ctx.fill();
-      // the treat, with a little drop shadow for depth
+      // dark "badge" disc behind each treat so the light ones pop on the pink
+      const rad = it.size*0.6;
+      ctx.fillStyle = it.kind==="bomb" ? "rgba(18,18,24,.6)"
+                    : it.bad            ? "rgba(95,20,70,.5)"
+                    :                      "rgba(40,16,48,.45)";
+      ctx.beginPath(); ctx.arc(0,0,rad,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle="rgba(255,255,255,.9)"; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(0,0,rad,0,Math.PI*2); ctx.stroke();
+      // the treat on top, with a crisp shadow
       ctx.rotate(it.rot);
       ctx.font = it.size+"px serif";
-      ctx.shadowColor="rgba(70,10,45,.4)"; ctx.shadowBlur=5; ctx.shadowOffsetY=2;
+      ctx.shadowColor="rgba(0,0,0,.5)"; ctx.shadowBlur=3; ctx.shadowOffsetY=1;
       ctx.fillText(it.emoji, 0, 0);
       ctx.restore();
     }
