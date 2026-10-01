@@ -278,72 +278,102 @@
     ctx.fill();
   }
 
-  // Draw a cute pit/beagle-mix dog, centered at (cx), standing on the grass.
+  // Draw Maddie — a mostly-white pit/beagle/boxer mix with chestnut-brown
+  // patches, a white blaze up the center of the face, a brown "mask" around
+  // both eyes, floppy brown ears, white muzzle, and a big dark nose.
   function drawMaddie(cx){
     const baseY = H - 16;          // feet on grass
     const bodyW = maddie.w, bodyH = maddie.h;
     ctx.save();
     ctx.translate(cx, baseY);
-    // little bob
     const bob = Math.sin(elapsed*6)*1.5;
     ctx.translate(0, bob);
 
-    const tan = "#e2a76b", tanD = "#c98a4d", brown="#8a5a34", cream="#f6e3c7";
+    const white="#f6efe4", whiteSh="#e3d9c9", brown="#a35d2e", brownD="#71401f",
+          nose="#352420", tongue="#ff7183";
 
     // shadow
     ctx.fillStyle="rgba(0,0,0,.15)";
     ctx.beginPath(); ctx.ellipse(0, 2, bodyW*0.5, 8, 0, 0, Math.PI*2); ctx.fill();
 
-    // body
-    ctx.fillStyle=tan;
+    // ----- body (white) -----
+    ctx.fillStyle=white;
     roundRectPath(-bodyW*0.34, -bodyH*0.72, bodyW*0.68, bodyH*0.72, 20);
     ctx.fill();
-    // chest cream
-    ctx.fillStyle=cream;
-    ctx.beginPath(); ctx.ellipse(0,-bodyH*0.28, bodyW*0.17, bodyH*0.26,0,0,Math.PI*2); ctx.fill();
-    // legs
-    ctx.fillStyle=tanD;
-    ctx.fillRect(-bodyW*0.26,-10,14,12);
-    ctx.fillRect(bodyW*0.12,-10,14,12);
-    // tail (wag)
+    // brown saddle patch on the back (clipped to body)
+    ctx.save();
+    roundRectPath(-bodyW*0.34, -bodyH*0.72, bodyW*0.68, bodyH*0.72, 20);
+    ctx.clip();
+    ctx.fillStyle=brown;
+    ctx.beginPath(); ctx.ellipse(bodyW*0.16, -bodyH*0.5, bodyW*0.27, bodyH*0.32, -0.2, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    // legs (white)
+    ctx.fillStyle=white; ctx.strokeStyle=whiteSh; ctx.lineWidth=2;
+    ctx.beginPath(); roundRectPath(-bodyW*0.27,-12,16,14,6); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); roundRectPath(bodyW*0.11,-12,16,14,6); ctx.fill(); ctx.stroke();
+
+    // tail (brown, wagging)
     ctx.save();
     ctx.translate(bodyW*0.3,-bodyH*0.55);
     ctx.rotate(Math.sin(elapsed*12)*0.5 - 0.5);
-    ctx.fillStyle=tan;
+    ctx.fillStyle=brown;
     roundRectPath(0,-6,bodyW*0.22,12,6); ctx.fill();
     ctx.restore();
 
-    // head
+    // ----- head -----
     const hy = -bodyH*0.74;
-    ctx.fillStyle=tan;
-    ctx.beginPath(); ctx.ellipse(0,hy, bodyW*0.34, bodyH*0.34, 0,0,Math.PI*2); ctx.fill();
-    // ears (beagle floppy, brown)
+    const hw = bodyW*0.36, hh = bodyH*0.36;
+
+    // floppy brown ears (behind the head)
+    ctx.fillStyle=brownD;
+    ctx.save(); ctx.translate(-hw*0.92, hy+4); ctx.rotate(-0.12);
+    ctx.beginPath(); ctx.ellipse(0,0, hw*0.4, hh*0.92, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(hw*0.92, hy+4); ctx.rotate(0.12);
+    ctx.beginPath(); ctx.ellipse(0,0, hw*0.4, hh*0.92, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
+
+    // head base (white)
+    ctx.fillStyle=white;
+    ctx.beginPath(); ctx.ellipse(0,hy, hw, hh, 0,0,Math.PI*2); ctx.fill();
+
+    // markings clipped to the head
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(0,hy, hw, hh, 0,0,Math.PI*2); ctx.clip();
+    // brown cap over the top of the head and around the eyes
     ctx.fillStyle=brown;
-    ctx.save(); ctx.translate(-bodyW*0.32, hy-2); ctx.rotate(-0.15);
-    ctx.beginPath(); ctx.ellipse(0,0, bodyW*0.13, bodyH*0.3, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
-    ctx.save(); ctx.translate(bodyW*0.32, hy-2); ctx.rotate(0.15);
-    ctx.beginPath(); ctx.ellipse(0,0, bodyW*0.13, bodyH*0.3, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
-    // brown patch over one eye
-    ctx.fillStyle=brown;
-    ctx.beginPath(); ctx.ellipse(bodyW*0.12, hy-bodyH*0.04, bodyW*0.14, bodyH*0.16,0,0,Math.PI*2); ctx.fill();
-    // muzzle cream
-    ctx.fillStyle=cream;
-    ctx.beginPath(); ctx.ellipse(0, hy+bodyH*0.12, bodyW*0.2, bodyH*0.17,0,0,Math.PI*2); ctx.fill();
-    // eyes
-    ctx.fillStyle="#2b2135";
-    ctx.beginPath(); ctx.arc(-bodyW*0.12, hy-bodyH*0.02, 4.5,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(bodyW*0.12, hy-bodyH*0.02, 4.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, hy-hh*0.26, hw*1.02, hh*0.92, 0,0,Math.PI*2); ctx.fill();
+    // white blaze down the center (narrow at top, wider toward the muzzle)
+    ctx.fillStyle=white;
+    ctx.beginPath();
+    ctx.moveTo(-hw*0.09, hy-hh);
+    ctx.lineTo( hw*0.09, hy-hh);
+    ctx.lineTo( hw*0.2,  hy+hh*0.55);
+    ctx.lineTo(-hw*0.2,  hy+hh*0.55);
+    ctx.closePath(); ctx.fill();
+    // white muzzle (lower face)
+    ctx.fillStyle=white;
+    ctx.beginPath(); ctx.ellipse(0, hy+hh*0.44, hw*0.76, hh*0.6, 0,0,Math.PI*2); ctx.fill();
+    ctx.restore(); // end head clip
+
+    // eyes (dark, sitting in the brown mask either side of the blaze)
+    const eyeY = hy - hh*0.05, eyeX = hw*0.36;
+    ctx.fillStyle="#2b2018";
+    ctx.beginPath(); ctx.arc(-eyeX, eyeY, 5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( eyeX, eyeY, 5,0,Math.PI*2); ctx.fill();
     ctx.fillStyle="#fff";
-    ctx.beginPath(); ctx.arc(-bodyW*0.11, hy-bodyH*0.03, 1.6,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(bodyW*0.13, hy-bodyH*0.03, 1.6,0,Math.PI*2); ctx.fill();
-    // nose
-    ctx.fillStyle="#2b2135";
-    ctx.beginPath(); ctx.ellipse(0, hy+bodyH*0.06, 6,4.5,0,0,Math.PI*2); ctx.fill();
-    // open happy mouth + tongue (the "catcher")
-    ctx.fillStyle="#7a3b2e";
-    ctx.beginPath(); ctx.arc(0, hy+bodyH*0.16, 9, 0, Math.PI); ctx.fill();
-    ctx.fillStyle="#ff6f81";
-    ctx.beginPath(); ctx.ellipse(0, hy+bodyH*0.2, 5,4,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-eyeX+1.6, eyeY-1.6, 1.7,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( eyeX+1.6, eyeY-1.6, 1.7,0,Math.PI*2); ctx.fill();
+
+    // big dark nose on the white muzzle
+    ctx.fillStyle=nose;
+    ctx.beginPath(); ctx.ellipse(0, hy+hh*0.4, 8.5,6.5,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.35)";
+    ctx.beginPath(); ctx.ellipse(-2.2, hy+hh*0.37, 2.4,1.5,0,0,Math.PI*2); ctx.fill();
+
+    // little smile + tongue
+    ctx.strokeStyle=nose; ctx.lineWidth=2; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(0, hy+hh*0.4+6.5); ctx.lineTo(0, hy+hh*0.62); ctx.stroke();
+    ctx.fillStyle=tongue;
+    ctx.beginPath(); ctx.ellipse(0, hy+hh*0.74, 6,5,0,0,Math.PI*2); ctx.fill();
 
     ctx.restore();
   }
