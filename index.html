@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Maddie's Treat Catch</title>
+<style>
+  :root{
+    --sky1:#8ec5ff; --sky2:#c8e9ff; --grass:#7ec85a; --grass2:#5fae3c;
+    --accent:#ff7a59; --accent2:#ffb23e; --ink:#2b2135; --panel:rgba(255,255,255,.92);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
+    background:#1b2433;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;color:var(--ink);overflow:hidden;
+  }
+  #wrap{
+    position:relative;width:min(96vw,480px);height:min(92vh,720px);
+    border-radius:22px;overflow:hidden;
+    box-shadow:0 24px 60px rgba(0,0,0,.45),inset 0 0 0 4px rgba(255,255,255,.15);
+    background:linear-gradient(180deg,var(--sky1),var(--sky2) 55%);
+    touch-action:none;user-select:none;
+  }
+  canvas{display:block;width:100%;height:100%;}
+
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:center;padding:12px 16px;pointer-events:none;font-weight:bold;}
+  .pill{background:var(--panel);padding:6px 12px;border-radius:999px;
+    box-shadow:0 3px 0 rgba(0,0,0,.12);font-size:15px;}
+  #lives{letter-spacing:2px;font-size:18px;}
+
+  /* Overlays */
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;
+    background:linear-gradient(180deg,rgba(27,36,51,.35),rgba(27,36,51,.55));
+    backdrop-filter:blur(2px);}
+  .hidden{display:none !important;}
+  .card{background:var(--panel);border-radius:20px;padding:26px 24px;max-width:340px;
+    box-shadow:0 16px 40px rgba(0,0,0,.35);}
+  h1{margin:0 0 4px;font-size:30px;color:var(--ink);line-height:1.05;}
+  h1 span{color:var(--accent);}
+  h2{margin:0 0 6px;font-size:26px;}
+  p{margin:8px 0;font-size:15px;color:#4a4257;line-height:1.4;}
+  .big{font-size:40px;margin:2px 0;}
+  button{
+    font-family:inherit;font-weight:bold;font-size:19px;cursor:pointer;
+    color:#fff;border:none;border-radius:14px;padding:14px 30px;margin-top:6px;
+    background:linear-gradient(180deg,var(--accent2),var(--accent));
+    box-shadow:0 5px 0 #d9542f,0 10px 20px rgba(0,0,0,.25);
+    transition:transform .05s,box-shadow .05s;
+  }
+  button:active{transform:translateY(4px);box-shadow:0 1px 0 #d9542f;}
+  .hint{font-size:13px;color:#6b6478;margin-top:10px;}
+  .emoji-row{font-size:26px;letter-spacing:4px;margin:6px 0;}
+  .score-line{font-size:17px;color:#4a4257;}
+  .best{color:var(--accent);font-weight:bold;}
+  #muteBtn{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    pointer-events:auto;background:var(--panel);color:var(--ink);
+    font-size:13px;padding:5px 12px;border-radius:999px;box-shadow:0 3px 0 rgba(0,0,0,.12);
+    display:none;}
+  #muteBtn:active{transform:translateX(-50%) translateY(2px);box-shadow:none;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="pill">🦴 <span id="score">0</span></div>
+    <div class="pill" id="lives">❤️❤️❤️</div>
+    <div class="pill">Best <span id="best">0</span></div>
+  </div>
+  <button id="muteBtn">🔊 Sound</button>
+
+  <!-- Start screen -->
+  <div id="startScreen" class="overlay">
+    <div class="card">
+      <h1>Maddie's <span>Treat Catch</span></h1>
+      <div class="emoji-row">🐕🦴🍖🍪</div>
+      <p>Move <b>Maddie</b> to catch the falling treats!<br>
+         Watch out for the <b>bath stuff</b> 🧼🥾🚿 — she hates those.</p>
+      <p class="hint">Move: drag / mouse / ← → keys</p>
+      <button id="playBtn">▶ Play</button>
+    </div>
+  </div>
+
+  <!-- Game over screen -->
+  <div id="overScreen" class="overlay hidden">
+    <div class="card">
+      <h2>Good girl, Maddie! 🐾</h2>
+      <div class="score-line">You caught</div>
+      <div class="big">🦴 <span id="finalScore">0</span></div>
+      <div class="score-line">Best: <span id="finalBest" class="best">0</span></div>
+      <div id="newBest" class="score-line best hidden">🎉 New high score! 🎉</div>
+      <button id="againBtn">↻ Play Again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const cv = document.getElementById("game");
+  const ctx = cv.getContext("2d");
+
+  // Logical game size; we scale the canvas buffer to device pixels.
+  let W = 480, H = 720, DPR = 1;
+  function resize(){
+    const r = cv.getBoundingClientRect();
+    W = r.width; H = r.height;
+    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+    cv.width = Math.round(W * DPR);
+    cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+
+  // ---------- Audio (tiny Web Audio blips) ----------
+  let actx = null, muted = false;
+  function ensureAudio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+  function blip(freq, dur, type, vol){
+    if(muted || !actx) return;
+    try{
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || "sine"; o.frequency.value = freq;
+      g.gain.value = vol || 0.08;
+      o.connect(g); g.connect(actx.destination);
+      const t = actx.currentTime;
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + (dur||0.12));
+      o.start(t); o.stop(t + (dur||0.12));
+    }catch(e){}
+  }
+  const sndCatch = () => { blip(660,0.09,"triangle",0.09); setTimeout(()=>blip(880,0.09,"triangle",0.09),70); };
+  const sndBad   = () => { blip(180,0.22,"sawtooth",0.10); };
+  const sndOver  = () => { blip(400,0.18,"square",0.09); setTimeout(()=>blip(300,0.18,"square",0.09),160); setTimeout(()=>blip(200,0.28,"square",0.09),330); };
+
+  // ---------- State ----------
+  const GOOD = ["🦴","🍖","🍪","🥓","🧀"];
+  const BAD  = ["🧼","🥾","🚿","🛁"];
+  let state = "start"; // start | play | over
+  let score = 0, lives = 3, best = 0;
+  let items = [], sparkles = [];
+  let spawnTimer = 0, spawnEvery = 0.9, fallBase = 150, elapsed = 0;
+  let maddie = { x: W/2, w: 92, h: 78, targetX: W/2 };
+
+  try { best = parseInt(localStorage.getItem("maddieBest")||"0",10) || 0; } catch(e){ best = 0; }
+
+  // ---------- Input ----------
+  let pointerActive = false;
+  function setTargetFromClientX(clientX){
+    const r = cv.getBoundingClientRect();
+    maddie.targetX = Math.max(maddie.w/2, Math.min(W - maddie.w/2, clientX - r.left));
+  }
+  cv.addEventListener("pointerdown", e => { pointerActive = true; setTargetFromClientX(e.clientX); });
+  cv.addEventListener("pointermove", e => { if(pointerActive || e.pointerType==="mouse") setTargetFromClientX(e.clientX); });
+  window.addEventListener("pointerup",   () => pointerActive = false);
+  const keys = {};
+  window.addEventListener("keydown", e => { keys[e.key] = true; });
+  window.addEventListener("keyup",   e => { keys[e.key] = false; });
+
+  // ---------- Spawning ----------
+  function spawnItem(){
+    const isBad = Math.random() < 0.26;
+    const emoji = isBad ? BAD[(Math.random()*BAD.length)|0] : GOOD[(Math.random()*GOOD.length)|0];
+    const size = 34 + Math.random()*10;
+    items.push({
+      x: size + Math.random()*(W - size*2),
+      y: -size,
+      vy: fallBase + Math.random()*60 + elapsed*7,
+      size, emoji, bad: isBad,
+      rot: (Math.random()-0.5)*0.5, vr:(Math.random()-0.5)*1.2
+    });
+  }
+  function addSparkles(x, y, color){
+    for(let i=0;i<10;i++){
+      sparkles.push({ x, y, vx:(Math.random()-0.5)*220, vy:(Math.random()-0.9)*220,
+        life:0.6, max:0.6, color });
+    }
+  }
+
+  // ---------- Update ----------
+  function reset(){
+    score = 0; lives = 3; items = []; sparkles = [];
+    spawnTimer = 0; spawnEvery = 0.9; elapsed = 0;
+    maddie.x = maddie.targetX = W/2;
+    updateHud();
+  }
+  function loseLife(){
+    lives--; updateHud(); sndBad();
+    if(lives <= 0) gameOver();
+  }
+  function update(dt){
+    if(state !== "play") return;
+    elapsed += dt;
+    // difficulty ramps up slowly
+    spawnEvery = Math.max(0.42, 0.9 - elapsed*0.012);
+
+    // keyboard movement
+    const kv = 420;
+    if(keys["ArrowLeft"]||keys["a"]||keys["A"])  maddie.targetX -= kv*dt;
+    if(keys["ArrowRight"]||keys["d"]||keys["D"]) maddie.targetX += kv*dt;
+    maddie.targetX = Math.max(maddie.w/2, Math.min(W - maddie.w/2, maddie.targetX));
+    // smooth follow
+    maddie.x += (maddie.targetX - maddie.x) * Math.min(1, dt*14);
+
+    // spawn
+    spawnTimer += dt;
+    if(spawnTimer >= spawnEvery){ spawnTimer = 0; spawnItem(); }
+
+    // catch line = top of Maddie's head
+    const catchY = H - maddie.h - 24;
+    for(let i = items.length-1; i>=0; i--){
+      const it = items[i];
+      it.y += it.vy * dt;
+      it.rot += it.vr * dt;
+      // collision with Maddie's mouth area
+      if(it.y + it.size*0.4 >= catchY && it.y - it.size*0.4 <= H - 24){
+        if(Math.abs(it.x - maddie.x) < maddie.w*0.52){
+          if(it.bad){ loseLife(); addSparkles(it.x,it.y,"#9fd0ff"); }
+          else { score++; updateHud(); sndCatch(); addSparkles(it.x,it.y,"#ffd23e");
+                 if(score>best){ best=score; try{localStorage.setItem("maddieBest",best);}catch(e){} updateHud(); } }
+          items.splice(i,1); continue;
+        }
+      }
+      // off bottom
+      if(it.y - it.size > H){
+        items.splice(i,1);
+        if(!it.bad) { /* missing a treat is free — keep it chill */ }
+      }
+    }
+    // sparkles
+    for(let i=sparkles.length-1;i>=0;i--){
+      const s=sparkles[i]; s.life-=dt; s.x+=s.vx*dt; s.y+=s.vy*dt; s.vy+=600*dt;
+      if(s.life<=0) sparkles.splice(i,1);
+    }
+  }
+
+  // ---------- Drawing ----------
+  let cloudOffset = 0;
+  function drawBackground(dt){
+    // sky
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,"#8ec5ff"); g.addColorStop(.6,"#c8e9ff"); g.addColorStop(1,"#e9f6ff");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // clouds
+    cloudOffset += dt*14;
+    ctx.fillStyle="rgba(255,255,255,.8)";
+    const cw = W+160;
+    for(let i=0;i<3;i++){
+      const cx = ((i*180 - (cloudOffset % cw)) + cw) % cw - 80;
+      const cy = 70 + i*60;
+      cloud(cx, cy, 34 - i*4);
+    }
+    // sun
+    ctx.save();
+    ctx.fillStyle="rgba(255,225,120,.9)";
+    ctx.beginPath(); ctx.arc(W-56,66,30,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    // grass
+    const gh = maddie.h + 14;
+    const gg = ctx.createLinearGradient(0,H-gh,0,H);
+    gg.addColorStop(0,"#8fd96a"); gg.addColorStop(1,"#5fae3c");
+    ctx.fillStyle=gg; ctx.fillRect(0,H-gh,W,gh);
+    ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,H-gh+2); ctx.lineTo(W,H-gh+2); ctx.stroke();
+  }
+  function cloud(x,y,r){
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.arc(x+r,y+6,r*0.8,0,Math.PI*2);
+    ctx.arc(x-r,y+6,r*0.75,0,Math.PI*2);
+    ctx.arc(x+r*0.2,y-r*0.5,r*0.7,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // Draw a cute pit/beagle-mix dog, centered at (cx), standing on the grass.
+  function drawMaddie(cx){
+    const baseY = H - 16;          // feet on grass
+    const bodyW = maddie.w, bodyH = maddie.h;
+    ctx.save();
+    ctx.translate(cx, baseY);
+    // little bob
+    const bob = Math.sin(elapsed*6)*1.5;
+    ctx.translate(0, bob);
+
+    const tan = "#e2a76b", tanD = "#c98a4d", brown="#8a5a34", cream="#f6e3c7";
+
+    // shadow
+    ctx.fillStyle="rgba(0,0,0,.15)";
+    ctx.beginPath(); ctx.ellipse(0, 2, bodyW*0.5, 8, 0, 0, Math.PI*2); ctx.fill();
+
+    // body
+    ctx.fillStyle=tan;
+    roundRectPath(-bodyW*0.34, -bodyH*0.72, bodyW*0.68, bodyH*0.72, 20);
+    ctx.fill();
+    // chest cream
+    ctx.fillStyle=cream;
+    ctx.beginPath(); ctx.ellipse(0,-bodyH*0.28, bodyW*0.17, bodyH*0.26,0,0,Math.PI*2); ctx.fill();
+    // legs
+    ctx.fillStyle=tanD;
+    ctx.fillRect(-bodyW*0.26,-10,14,12);
+    ctx.fillRect(bodyW*0.12,-10,14,12);
+    // tail (wag)
+    ctx.save();
+    ctx.translate(bodyW*0.3,-bodyH*0.55);
+    ctx.rotate(Math.sin(elapsed*12)*0.5 - 0.5);
+    ctx.fillStyle=tan;
+    roundRectPath(0,-6,bodyW*0.22,12,6); ctx.fill();
+    ctx.restore();
+
+    // head
+    const hy = -bodyH*0.74;
+    ctx.fillStyle=tan;
+    ctx.beginPath(); ctx.ellipse(0,hy, bodyW*0.34, bodyH*0.34, 0,0,Math.PI*2); ctx.fill();
+    // ears (beagle floppy, brown)
+    ctx.fillStyle=brown;
+    ctx.save(); ctx.translate(-bodyW*0.32, hy-2); ctx.rotate(-0.15);
+    ctx.beginPath(); ctx.ellipse(0,0, bodyW*0.13, bodyH*0.3, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(bodyW*0.32, hy-2); ctx.rotate(0.15);
+    ctx.beginPath(); ctx.ellipse(0,0, bodyW*0.13, bodyH*0.3, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
+    // brown patch over one eye
+    ctx.fillStyle=brown;
+    ctx.beginPath(); ctx.ellipse(bodyW*0.12, hy-bodyH*0.04, bodyW*0.14, bodyH*0.16,0,0,Math.PI*2); ctx.fill();
+    // muzzle cream
+    ctx.fillStyle=cream;
+    ctx.beginPath(); ctx.ellipse(0, hy+bodyH*0.12, bodyW*0.2, bodyH*0.17,0,0,Math.PI*2); ctx.fill();
+    // eyes
+    ctx.fillStyle="#2b2135";
+    ctx.beginPath(); ctx.arc(-bodyW*0.12, hy-bodyH*0.02, 4.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bodyW*0.12, hy-bodyH*0.02, 4.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.arc(-bodyW*0.11, hy-bodyH*0.03, 1.6,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bodyW*0.13, hy-bodyH*0.03, 1.6,0,Math.PI*2); ctx.fill();
+    // nose
+    ctx.fillStyle="#2b2135";
+    ctx.beginPath(); ctx.ellipse(0, hy+bodyH*0.06, 6,4.5,0,0,Math.PI*2); ctx.fill();
+    // open happy mouth + tongue (the "catcher")
+    ctx.fillStyle="#7a3b2e";
+    ctx.beginPath(); ctx.arc(0, hy+bodyH*0.16, 9, 0, Math.PI); ctx.fill();
+    ctx.fillStyle="#ff6f81";
+    ctx.beginPath(); ctx.ellipse(0, hy+bodyH*0.2, 5,4,0,0,Math.PI*2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  function roundRectPath(x,y,w,h,r){
+    r = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function drawItems(){
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    for(const it of items){
+      ctx.save();
+      ctx.translate(it.x,it.y); ctx.rotate(it.rot);
+      ctx.font = it.size+"px serif";
+      ctx.fillText(it.emoji, 0, 0);
+      ctx.restore();
+    }
+  }
+  function drawSparkles(){
+    for(const s of sparkles){
+      ctx.globalAlpha = Math.max(0, s.life/s.max);
+      ctx.fillStyle = s.color;
+      ctx.beginPath(); ctx.arc(s.x,s.y,3,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function render(dt){
+    drawBackground(dt);
+    drawItems();
+    drawMaddie(maddie.x);
+    drawSparkles();
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now){
+    let dt = (now - last)/1000; last = now;
+    if(dt > 0.05) dt = 0.05; // clamp
+    update(dt);
+    render(dt);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- HUD / Screens ----------
+  const hud = document.getElementById("hud");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+  const livesEl = document.getElementById("lives");
+  const muteBtn = document.getElementById("muteBtn");
+  function updateHud(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+    livesEl.textContent = "❤️".repeat(Math.max(0,lives)) + "🤍".repeat(Math.max(0,3-lives));
+  }
+  function show(id){ document.getElementById(id).classList.remove("hidden"); }
+  function hide(id){ document.getElementById(id).classList.add("hidden"); }
+
+  function startGame(){
+    ensureAudio();
+    reset();
+    state = "play";
+    hide("startScreen"); hide("overScreen");
+    hud.classList.remove("hidden");
+    muteBtn.style.display = "block";
+  }
+  function gameOver(){
+    state = "over";
+    sndOver();
+    document.getElementById("finalScore").textContent = score;
+    document.getElementById("finalBest").textContent = best;
+    const nb = document.getElementById("newBest");
+    if(score >= best && score>0) nb.classList.remove("hidden"); else nb.classList.add("hidden");
+    show("overScreen");
+    hud.classList.add("hidden");
+  }
+
+  document.getElementById("playBtn").addEventListener("click", startGame);
+  document.getElementById("againBtn").addEventListener("click", startGame);
+  muteBtn.addEventListener("click", () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? "🔇 Muted" : "🔊 Sound";
+  });
+
+  // start
+  resize();
+  updateHud();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
