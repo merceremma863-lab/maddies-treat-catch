@@ -55,7 +55,8 @@
   }
   button:active{transform:translateY(4px);box-shadow:0 1px 0 #d9542f;}
   .hint{font-size:13px;color:#6b6478;margin-top:10px;}
-  .emoji-row{font-size:26px;letter-spacing:4px;margin:6px 0;}
+  .emoji-row{font-size:26px;letter-spacing:4px;margin:6px 0 0;}
+  .byline{font-size:14px;font-weight:bold;color:var(--accent);margin:2px 0 0;}
   .score-line{font-size:17px;color:#4a4257;}
   .best{color:var(--accent);font-weight:bold;}
   #muteBtn{position:absolute;bottom:10px;left:12px;
@@ -96,6 +97,7 @@
     <div class="card">
       <h1>Maddie's <span>Treat Catch</span></h1>
       <div class="emoji-row">🐕🦴🧈</div>
+      <div class="byline">by Emma &amp; Maddie 🐾</div>
       <p class="hint" style="margin:6px 0 2px">Catch treats, build combos, grab power-ups,<br>dodge the bath stuff 🧼. Pick a mode:</p>
       <div class="modes">
         <button class="modeBtn" data-mode="classic"><b>🐾 Classic</b><small>3 lives · endless</small></button>
@@ -113,7 +115,7 @@
       <div class="score-line" id="overMode">Classic mode</div>
       <div class="big">🦴 <span id="finalScore">0</span></div>
       <div class="score-line">Best: <span id="finalBest" class="best">0</span></div>
-      <div id="newBest" class="score-line best hidden">🎉 New high score! 🎉</div>
+      <div id="newBest" class="score-line best hidden">🎉 New high score, Emma! 🎉</div>
       <button id="againBtn">↻ Play Again</button>
       <button id="menuBtn" class="ghost">☰ Menu</button>
     </div>
@@ -505,8 +507,18 @@
     ctx.textAlign="center"; ctx.textBaseline="middle";
     for(const it of items){
       ctx.save();
-      ctx.translate(it.x,it.y); ctx.rotate(it.rot);
+      ctx.translate(it.x,it.y);
+      // soft white glow so the light-colored treats pop on the pink
+      const g = ctx.createRadialGradient(0,0,0,0,0,it.size*0.75);
+      g.addColorStop(0,"rgba(255,255,255,.75)");
+      g.addColorStop(.6,"rgba(255,255,255,.35)");
+      g.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(0,0,it.size*0.75,0,Math.PI*2); ctx.fill();
+      // the treat, with a little drop shadow for depth
+      ctx.rotate(it.rot);
       ctx.font = it.size+"px serif";
+      ctx.shadowColor="rgba(70,10,45,.4)"; ctx.shadowBlur=5; ctx.shadowOffsetY=2;
       ctx.fillText(it.emoji, 0, 0);
       ctx.restore();
     }
