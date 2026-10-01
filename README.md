@@ -1,7 +1,7 @@
 # 🐕 Maddie's Treat Catch
 
 A cute little browser game starring **Maddie** — a pitbull-beagle mix who loves treats!
-Move Maddie around to catch the falling treats 🦴🍖🍪🥓🧀 and dodge the bath stuff 🧼🥾🚿🛁 she hates.
+Move Maddie around to catch her favorite treats — 🦴 bones and 🧈 butter — and dodge the bath stuff 🧼🥾🚿🛁 she hates.
 
 Made by Emma 💛
 

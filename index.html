@@ -95,7 +95,7 @@
   <div id="startScreen" class="overlay">
     <div class="card">
       <h1>Maddie's <span>Treat Catch</span></h1>
-      <div class="emoji-row">🐕🦴🍖🍪</div>
+      <div class="emoji-row">🐕🦴🧈</div>
       <p class="hint" style="margin:6px 0 2px">Catch treats, build combos, grab power-ups,<br>dodge the bath stuff 🧼. Pick a mode:</p>
       <div class="modes">
         <button class="modeBtn" data-mode="classic"><b>🐾 Classic</b><small>3 lives · endless</small></button>
@@ -159,7 +159,7 @@
   const sndOver  = () => { blip(400,0.18,"square",0.09); setTimeout(()=>blip(300,0.18,"square",0.09),160); setTimeout(()=>blip(200,0.28,"square",0.09),330); };
 
   // ---------- State ----------
-  const GOOD = ["🦴","🍖","🍪","🥓","🧀"];
+  const GOOD = ["🦴"];   // bones (butter is a separate big-points treat below)
   const BAD  = ["🧼","🥾","🚿","🛁"];
   let state = "start"; // start | play | over
   let score = 0, lives = 3, best = 0;
@@ -202,13 +202,13 @@
     const r = Math.random();
     const canBad = cfg.bad && frenzy<=0;
     const canHeart = cfg.maxLives>0 && lives<maxLives;
-    if(frenzy > 0){                                   // frenzy: only good, lots of steaks
-      if(r < 0.3){ kind="steak"; emoji="🥩"; size=44; }
+    if(frenzy > 0){                                   // frenzy: only good, lots of butter
+      if(r < 0.35){ kind="butter"; emoji="🧈"; size=42; }
       else { kind="good"; emoji=GOOD[(Math.random()*GOOD.length)|0]; }
     } else if(canBad && r < 0.23){ kind="bad"; emoji=BAD[(Math.random()*BAD.length)|0]; }
       else if(canHeart && r < 0.26){ kind="heart"; emoji="💖"; size=40; }
-      else if(r < 0.30){ kind="star";  emoji="⭐"; size=46; }
-      else if(r < 0.38){ kind="steak"; emoji="🥩"; size=44; }
+      else if(r < 0.30){ kind="star";   emoji="⭐"; size=46; }
+      else if(r < 0.42){ kind="butter"; emoji="🧈"; size=42; }
       else { kind="good"; emoji=GOOD[(Math.random()*GOOD.length)|0]; }
     items.push({
       x: size + Math.random()*(W - size*2),
@@ -296,11 +296,11 @@
           addFloat(it.x, it.y-12, "TREAT FRENZY!", "#ff9a1e");
         } else {
           combo++; if(combo>bestCombo) bestCombo=combo;
-          const base = (it.kind === "steak") ? 5 : 1;
+          const base = (it.kind === "butter") ? 5 : 1;
           const gained = base * comboMult() * (frenzy > 0 ? 2 : 1);
           score += gained; sndCatch();
-          addSparkles(it.x, it.y, it.kind==="steak" ? "#ff9a3e" : "#ffd23e", it.kind==="steak"?16:10);
-          addFloat(it.x, it.y-12, "+"+gained, it.kind==="steak" ? "#ff7a2e" : "#3a9bff");
+          addSparkles(it.x, it.y, it.kind==="butter" ? "#ffcf3e" : "#ffd23e", it.kind==="butter"?16:10);
+          addFloat(it.x, it.y-12, "+"+gained, it.kind==="butter" ? "#e8a100" : "#3a9bff");
           if(score > best){ best = score; saveBest(mode, best); }
           updateHud();
         }
