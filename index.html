@@ -181,9 +181,10 @@
   let items = [], sparkles = [];
   let spawnTimer = 0, spawnEvery = 0.9, fallBase = 150, elapsed = 0;
   let combo = 0, bestCombo = 0, frenzy = 0, shake = 0, maxLives = 5;
+  let wave = 1, waveTimer = 0, waveBanner = 0;
   let popups = [];
   let maddie = { x: W/2, w: 92, h: 78, targetX: W/2, squash: 0 };
-  function comboMult(){ return Math.min(5, 1 + Math.floor(combo/6)); }
+  function comboMult(){ return Math.min(8, 1 + Math.floor(combo/5)); }
 
   // ----- game modes -----
   const MODES = {
@@ -253,6 +254,7 @@
     score = 0; items = []; sparkles = []; popups = [];
     spawnTimer = 0; spawnEvery = cfg.spawn0; elapsed = 0;
     combo = 0; bestCombo = 0; frenzy = 0; shake = 0; maddie.squash = 0;
+    wave = 1; waveTimer = 0; waveBanner = 0;
     lives = cfg.lives; maxLives = cfg.maxLives; timeLeft = cfg.timed;
     best = loadBest(mode);
     maddie.x = maddie.targetX = W/2;
@@ -273,6 +275,11 @@
     if(frenzy > 0){ frenzy -= dt; if(frenzy < 0) frenzy = 0; }
     if(shake > 0){ shake -= dt; if(shake < 0) shake = 0; }
     if(maddie.squash > 0){ maddie.squash -= dt*4; if(maddie.squash < 0) maddie.squash = 0; }
+    if(waveBanner > 0){ waveBanner -= dt; if(waveBanner < 0) waveBanner = 0; }
+    // waves — a new one every 15s makes it hotter (more bombs)
+    waveTimer += dt;
+    if(waveTimer >= 15){ waveTimer = 0; wave++; waveBanner = 2.0;
+      blip(520,0.12,"square",0.09); setTimeout(()=>blip(760,0.14,"square",0.09),120); }
 
     // keyboard movement
     const kv = 440;
@@ -664,6 +671,12 @@
   function drawComboBanner(){
     if(state !== "play") return;
     ctx.textAlign="center"; ctx.textBaseline="middle";
+    if(waveBanner > 0){
+      ctx.font="bold 26px 'Trebuchet MS',sans-serif";
+      ctx.lineWidth=5; ctx.strokeStyle="#fff";
+      ctx.strokeText("🌊 WAVE "+wave+" 🌊", W/2, H*0.42);
+      ctx.fillStyle="#ff2e8e"; ctx.fillText("🌊 WAVE "+wave+" 🌊", W/2, H*0.42);
+    }
     if(frenzy > 0){
       const a = 0.65 + 0.35*Math.sin(elapsed*14);
       ctx.font="bold 22px 'Trebuchet MS',sans-serif";
