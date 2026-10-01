@@ -21,7 +21,7 @@
     position:relative;width:min(96vw,480px);height:min(92vh,720px);
     border-radius:22px;overflow:hidden;
     box-shadow:0 24px 60px rgba(0,0,0,.45),inset 0 0 0 4px rgba(255,255,255,.15);
-    background:linear-gradient(180deg,#ff92d2,#ff2b90 55%);
+    background:linear-gradient(180deg,#f9b7d2,#f29ac0 60%);
     touch-action:none;user-select:none;
   }
   canvas{display:block;width:100%;height:100%;}
@@ -36,7 +36,7 @@
   /* Overlays */
   .overlay{position:absolute;inset:0;display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;
-    background:linear-gradient(180deg,rgba(27,36,51,.35),rgba(27,36,51,.55));
+    background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,200,225,.3));
     backdrop-filter:blur(2px);}
   .hidden{display:none !important;}
   .card{background:var(--panel);border-radius:20px;padding:26px 24px;max-width:340px;
@@ -63,6 +63,20 @@
     font-size:13px;padding:5px 12px;border-radius:999px;box-shadow:0 3px 0 rgba(0,0,0,.12);
     display:none;}
   #muteBtn:active{transform:translateY(2px);box-shadow:none;}
+  #endBtn{position:absolute;bottom:10px;right:12px;pointer-events:auto;
+    background:var(--panel);color:var(--ink);font-size:13px;padding:5px 12px;
+    border-radius:999px;box-shadow:0 3px 0 rgba(0,0,0,.12);display:none;font-weight:bold;}
+  #endBtn:active{transform:translateY(2px);box-shadow:none;}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+  .modeBtn{display:flex;flex-direction:column;align-items:center;gap:2px;margin:0;
+    padding:12px 8px;font-size:15px;border-radius:14px;color:#fff;
+    background:linear-gradient(180deg,#ff7fb6,#ff4f98);
+    box-shadow:0 4px 0 #d63a7a,0 8px 16px rgba(0,0,0,.2);}
+  .modeBtn small{font-weight:normal;font-size:11px;opacity:.95;}
+  .modeBtn:active{transform:translateY(3px);box-shadow:0 1px 0 #d63a7a;}
+  button.ghost{background:#fff;color:var(--accent);box-shadow:0 4px 0 #e2b9a9;
+    font-size:16px;padding:10px 24px;}
+  button.ghost:active{transform:translateY(3px);box-shadow:0 1px 0 #e2b9a9;}
 </style>
 </head>
 <body>
@@ -75,17 +89,20 @@
     <div class="pill">Best <span id="best">0</span></div>
   </div>
   <button id="muteBtn">🔊 Sound</button>
+  <button id="endBtn">⏹ End</button>
 
   <!-- Start screen -->
   <div id="startScreen" class="overlay">
     <div class="card">
       <h1>Maddie's <span>Treat Catch</span></h1>
       <div class="emoji-row">🐕🦴🍖🍪</div>
-      <p>Move <b>Maddie</b> to catch the treats and build combos!<br>
-         🥩 big points &nbsp;·&nbsp; ⭐ treat frenzy &nbsp;·&nbsp; 💖 extra life<br>
-         Dodge the <b>bath stuff</b> 🧼🥾🚿 — she hates those!</p>
-      <p class="hint">Move: drag / mouse / ← → keys</p>
-      <button id="playBtn">▶ Play</button>
+      <p class="hint" style="margin:6px 0 2px">Catch treats, build combos, grab power-ups,<br>dodge the bath stuff 🧼. Pick a mode:</p>
+      <div class="modes">
+        <button class="modeBtn" data-mode="classic"><b>🐾 Classic</b><small>3 lives · endless</small></button>
+        <button class="modeBtn" data-mode="time"><b>⏱️ Time Attack</b><small>60-second rush</small></button>
+        <button class="modeBtn" data-mode="zen"><b>🧘 Zen</b><small>no fails, just vibe</small></button>
+        <button class="modeBtn" data-mode="hard"><b>🔥 Hard</b><small>1 life · fast!</small></button>
+      </div>
     </div>
   </div>
 
@@ -93,11 +110,12 @@
   <div id="overScreen" class="overlay hidden">
     <div class="card">
       <h2>Good girl, Maddie! 🐾</h2>
-      <div class="score-line">You caught</div>
+      <div class="score-line" id="overMode">Classic mode</div>
       <div class="big">🦴 <span id="finalScore">0</span></div>
       <div class="score-line">Best: <span id="finalBest" class="best">0</span></div>
       <div id="newBest" class="score-line best hidden">🎉 New high score! 🎉</div>
       <button id="againBtn">↻ Play Again</button>
+      <button id="menuBtn" class="ghost">☰ Menu</button>
     </div>
   </div>
 </div>
@@ -152,7 +170,18 @@
   let maddie = { x: W/2, w: 92, h: 78, targetX: W/2, squash: 0 };
   function comboMult(){ return Math.min(5, 1 + Math.floor(combo/6)); }
 
-  try { best = parseInt(localStorage.getItem("maddieBest")||"0",10) || 0; } catch(e){ best = 0; }
+  // ----- game modes -----
+  const MODES = {
+    classic:{name:"🐾 Classic",    lives:3, maxLives:5, bad:true,  timed:0,  spawn0:0.9, ramp:0.012, minSpawn:0.42, fallMul:1.0},
+    time:   {name:"⏱️ Time Attack", lives:0, maxLives:0, bad:true,  timed:60, spawn0:0.7, ramp:0.010, minSpawn:0.35, fallMul:1.05},
+    zen:    {name:"🧘 Zen",         lives:0, maxLives:0, bad:false, timed:0,  spawn0:0.8, ramp:0.004, minSpawn:0.5,  fallMul:0.85},
+    hard:   {name:"🔥 Hard",        lives:1, maxLives:3, bad:true,  timed:0,  spawn0:0.7, ramp:0.022, minSpawn:0.3,  fallMul:1.3}
+  };
+  let mode = "classic", cfg = MODES.classic, timeLeft = 0;
+  function loadBest(m){ try{ return parseInt(localStorage.getItem("maddieBest_"+m)||"0",10)||0; }catch(e){ return 0; } }
+  function saveBest(m,v){ try{ localStorage.setItem("maddieBest_"+m, v); }catch(e){} }
+
+  best = loadBest(mode);
 
   // ---------- Input ----------
   let pointerActive = false;
@@ -171,18 +200,20 @@
   function spawnItem(){
     let kind, emoji, size = 34 + Math.random()*10;
     const r = Math.random();
+    const canBad = cfg.bad && frenzy<=0;
+    const canHeart = cfg.maxLives>0 && lives<maxLives;
     if(frenzy > 0){                                   // frenzy: only good, lots of steaks
       if(r < 0.3){ kind="steak"; emoji="🥩"; size=44; }
       else { kind="good"; emoji=GOOD[(Math.random()*GOOD.length)|0]; }
-    } else if(r < 0.23){ kind="bad";  emoji=BAD[(Math.random()*BAD.length)|0]; }
-      else if(r < 0.26 && lives < maxLives){ kind="heart"; emoji="💖"; size=40; }
+    } else if(canBad && r < 0.23){ kind="bad"; emoji=BAD[(Math.random()*BAD.length)|0]; }
+      else if(canHeart && r < 0.26){ kind="heart"; emoji="💖"; size=40; }
       else if(r < 0.30){ kind="star";  emoji="⭐"; size=46; }
       else if(r < 0.38){ kind="steak"; emoji="🥩"; size=44; }
       else { kind="good"; emoji=GOOD[(Math.random()*GOOD.length)|0]; }
     items.push({
       x: size + Math.random()*(W - size*2),
       y: -size,
-      vy: fallBase + Math.random()*60 + elapsed*6 + (frenzy>0?40:0),
+      vy: (fallBase + Math.random()*60 + elapsed*6 + (frenzy>0?40:0)) * cfg.fallMul,
       size, emoji, kind, bad: kind==="bad",
       rot: (Math.random()-0.5)*0.5, vr:(Math.random()-0.5)*1.2
     });
@@ -199,10 +230,13 @@
   }
 
   // ---------- Update ----------
-  function reset(){
-    score = 0; lives = 3; items = []; sparkles = []; popups = [];
-    spawnTimer = 0; spawnEvery = 0.9; elapsed = 0;
+  function reset(modeKey){
+    mode = modeKey || mode; cfg = MODES[mode];
+    score = 0; items = []; sparkles = []; popups = [];
+    spawnTimer = 0; spawnEvery = cfg.spawn0; elapsed = 0;
     combo = 0; bestCombo = 0; frenzy = 0; shake = 0; maddie.squash = 0;
+    lives = cfg.lives; maxLives = cfg.maxLives; timeLeft = cfg.timed;
+    best = loadBest(mode);
     maddie.x = maddie.targetX = W/2;
     updateHud();
   }
@@ -213,8 +247,10 @@
   function update(dt){
     if(state !== "play") return;
     elapsed += dt;
-    // difficulty ramps up slowly
-    spawnEvery = Math.max(0.42, 0.9 - elapsed*0.012);
+    // difficulty ramps up (per mode)
+    spawnEvery = Math.max(cfg.minSpawn, cfg.spawn0 - elapsed*cfg.ramp);
+    // countdown for timed modes
+    if(cfg.timed > 0){ timeLeft -= dt; if(timeLeft <= 0){ timeLeft = 0; updateHud(); gameOver(); return; } }
     // timers
     if(frenzy > 0){ frenzy -= dt; if(frenzy < 0) frenzy = 0; }
     if(shake > 0){ shake -= dt; if(shake < 0) shake = 0; }
@@ -244,9 +280,10 @@
          && Math.abs(it.x - maddie.x) < maddie.w*0.52){
         maddie.squash = 1; // happy hop
         if(it.kind === "bad"){
-          combo = 0; shake = 0.35; loseLife();
+          combo = 0; shake = 0.35;
+          if(cfg.timed > 0){ timeLeft = Math.max(0, timeLeft-3); addFloat(it.x, it.y-12, "-3s", "#ff5a5a"); }
+          else { loseLife(); addFloat(it.x, it.y-12, "oops!", "#ff5a5a"); }
           addSparkles(it.x, it.y, "#9fd0ff", 8);
-          addFloat(it.x, it.y-12, "oops!", "#ff5a5a");
         } else if(it.kind === "heart"){
           if(lives < maxLives){ lives++; updateHud(); }
           blip(880,0.12,"sine",0.1); setTimeout(()=>blip(1175,0.14,"sine",0.1),90);
@@ -264,7 +301,7 @@
           score += gained; sndCatch();
           addSparkles(it.x, it.y, it.kind==="steak" ? "#ff9a3e" : "#ffd23e", it.kind==="steak"?16:10);
           addFloat(it.x, it.y-12, "+"+gained, it.kind==="steak" ? "#ff7a2e" : "#3a9bff");
-          if(score > best){ best = score; try{localStorage.setItem("maddieBest",best);}catch(e){} }
+          if(score > best){ best = score; saveBest(mode, best); }
           updateHud();
         }
         items.splice(i,1); continue;
@@ -282,6 +319,7 @@
       const p=popups[i]; p.life-=dt; p.y-=36*dt;
       if(p.life<=0) popups.splice(i,1);
     }
+    if(cfg.timed > 0) updateHud();   // keep the countdown fresh
   }
 
   // ---------- Drawing ----------
@@ -290,16 +328,16 @@
   function srand(){ _seed = (_seed*1664525 + 1013904223) & 0x7fffffff; return _seed/0x7fffffff; }
   const spots = [];
   (function makeSpots(){
-    for(let gy=0; gy<10; gy++){
-      for(let gx=0; gx<6; gx++){
+    for(let gy=0; gy<12; gy++){
+      for(let gx=0; gx<7; gx++){
         spots.push({
-          x:(gx+0.5)/6 + (srand()-0.5)*0.15,
-          y:(gy+0.5)/10 + (srand()-0.5)*0.12,
-          r: 13 + srand()*13,
+          x:(gx+0.5)/7 + (srand()-0.5)*0.12,
+          y:(gy+0.5)/12 + (srand()-0.5)*0.10,
+          r: 9 + srand()*9,
           rot: srand()*Math.PI*2,
-          solid: srand() < 0.3,
+          solid: srand() < 0.38,
           seed: srand(),
-          skip: srand() < 0.06
+          skip: srand() < 0.04
         });
       }
     }
@@ -316,43 +354,36 @@
     }
     ctx.closePath(); ctx.fill();
   }
-  // leopard rosette (a broken ring of organic dark petals) or a solid spot
+  // hot-pink leopard rosette (bold broken ring of crescents) or a solid spot
   function drawSpot(cx,cy,r,rot,solid,seed){
     ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
-    const dark="rgba(32,12,15,.86)";
+    const hot="#e81d86";
     if(solid){
-      ctx.fillStyle=dark; blob(0,0,r*0.44,seed);
+      ctx.fillStyle=hot; blob(0,0,r*0.44,seed);
       ctx.restore(); return;
     }
-    // tawny center
-    ctx.fillStyle="rgba(140,56,30,.22)";
-    ctx.beginPath(); ctx.ellipse(0,0,r*0.5,r*0.42,0,0,Math.PI*2); ctx.fill();
-    // ring of dark petals with one gap => broken rosette
-    ctx.fillStyle=dark;
-    const petals=5, gap=(seed*petals)|0;
-    for(let i=0;i<petals;i++){
-      if(i===gap) continue;
-      const a=(i/petals)*Math.PI*2;
-      const px=Math.cos(a)*r*0.9, py=Math.sin(a)*r*0.76;
-      const pr=r*(0.3 + ((i*7+seed*13)%10)/55);
-      ctx.save(); ctx.translate(px,py); ctx.rotate(a+1.1);
-      blob(0,0,pr,seed+i*0.37);
-      ctx.restore();
+    // broken ring of 2–3 bold crescents
+    ctx.strokeStyle=hot; ctx.lineWidth=Math.max(3,r*0.44); ctx.lineCap="round";
+    const arcs = 2 + ((seed*10)|0)%2;
+    for(let i=0;i<arcs;i++){
+      const base = (i/arcs)*Math.PI*2 + seed*3;
+      const span = 1.0 + seed*0.7;
+      ctx.beginPath();
+      ctx.ellipse(0,0, r*0.82, r*0.66, 0, base, base+span);
+      ctx.stroke();
     }
+    // tiny center dot on some
+    if(seed>0.55){ ctx.fillStyle=hot; ctx.beginPath(); ctx.arc(0,0,r*0.15,0,Math.PI*2); ctx.fill(); }
     ctx.restore();
   }
   function drawBackground(dt){
-    // hot pink base
+    // clean pink background
     const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,"#ff92d2"); g.addColorStop(.5,"#ff4fa8"); g.addColorStop(1,"#ff2b90");
+    g.addColorStop(0,"#ff9ad6"); g.addColorStop(1,"#ff5aac");
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    // cheetah spots across everything
-    for(const s of spots){ if(!s.skip) drawSpot(s.x*W, s.y*H, s.r, s.rot, s.solid, s.seed); }
-    // ground strip (deeper magenta) so Maddie has a floor
+    // subtle ground so Maddie has a floor
     const gh = maddie.h + 14;
-    const gg = ctx.createLinearGradient(0,H-gh,0,H);
-    gg.addColorStop(0,"rgba(201,24,112,.5)"); gg.addColorStop(1,"rgba(140,8,74,.7)");
-    ctx.fillStyle=gg; ctx.fillRect(0,H-gh,W,gh);
+    ctx.fillStyle="rgba(220,40,120,.14)"; ctx.fillRect(0,H-gh,W,gh);
     ctx.strokeStyle="rgba(255,255,255,.35)"; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(0,H-gh+2); ctx.lineTo(W,H-gh+2); ctx.stroke();
   }
@@ -547,35 +578,60 @@
   const bestEl = document.getElementById("best");
   const livesEl = document.getElementById("lives");
   const muteBtn = document.getElementById("muteBtn");
+  const endBtn = document.getElementById("endBtn");
   function updateHud(){
     scoreEl.textContent = score;
     bestEl.textContent = best;
-    livesEl.textContent = "❤️".repeat(Math.max(0,lives)) + "🤍".repeat(Math.max(0,maxLives-lives));
+    if(cfg.timed > 0){
+      livesEl.textContent = "⏱️ " + Math.ceil(timeLeft);
+    } else if(cfg.maxLives > 0){
+      livesEl.textContent = "❤️".repeat(Math.max(0,lives)) + "🤍".repeat(Math.max(0,maxLives-lives));
+    } else {
+      livesEl.textContent = "🧘 ∞";
+    }
   }
   function show(id){ document.getElementById(id).classList.remove("hidden"); }
   function hide(id){ document.getElementById(id).classList.add("hidden"); }
 
-  function startGame(){
+  function startGame(modeKey){
     ensureAudio();
-    reset();
+    reset(modeKey);
     state = "play";
     hide("startScreen"); hide("overScreen");
     hud.classList.remove("hidden");
     muteBtn.style.display = "block";
+    endBtn.style.display = "block";
+  }
+  function toMenu(){
+    state = "start";
+    hide("overScreen"); show("startScreen");
+    hud.classList.add("hidden");
+    muteBtn.style.display = "none";
+    endBtn.style.display = "none";
   }
   function gameOver(){
     state = "over";
     sndOver();
+    const prevBest = loadBest(mode);
+    const isNew = score > prevBest;
+    if(isNew){ saveBest(mode, score); best = score; }
+    document.getElementById("overMode").textContent = cfg.name + " mode";
     document.getElementById("finalScore").textContent = score;
-    document.getElementById("finalBest").textContent = best;
+    document.getElementById("finalBest").textContent = Math.max(score, prevBest);
     const nb = document.getElementById("newBest");
-    if(score >= best && score>0) nb.classList.remove("hidden"); else nb.classList.add("hidden");
+    if(isNew && score>0) nb.classList.remove("hidden"); else nb.classList.add("hidden");
     show("overScreen");
     hud.classList.add("hidden");
+    muteBtn.style.display = "none";
+    endBtn.style.display = "none";
   }
 
-  document.getElementById("playBtn").addEventListener("click", startGame);
-  document.getElementById("againBtn").addEventListener("click", startGame);
+  document.querySelectorAll(".modeBtn").forEach(b => {
+    b.addEventListener("click", () => startGame(b.dataset.mode));
+  });
+  document.getElementById("againBtn").addEventListener("click", () => startGame(mode));
+  document.getElementById("menuBtn").addEventListener("click", toMenu);
+  endBtn.addEventListener("click", () => { if(state === "play") gameOver(); });
   muteBtn.addEventListener("click", () => {
     muted = !muted;
     muteBtn.textContent = muted ? "🔇 Muted" : "🔊 Sound";
