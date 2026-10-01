@@ -21,7 +21,7 @@
     position:relative;width:min(96vw,480px);height:min(92vh,720px);
     border-radius:22px;overflow:hidden;
     box-shadow:0 24px 60px rgba(0,0,0,.45),inset 0 0 0 4px rgba(255,255,255,.15);
-    background:linear-gradient(180deg,var(--sky1),var(--sky2) 55%);
+    background:linear-gradient(180deg,#ff92d2,#ff2b90 55%);
     touch-action:none;user-select:none;
   }
   canvas{display:block;width:100%;height:100%;}
@@ -58,11 +58,11 @@
   .emoji-row{font-size:26px;letter-spacing:4px;margin:6px 0;}
   .score-line{font-size:17px;color:#4a4257;}
   .best{color:var(--accent);font-weight:bold;}
-  #muteBtn{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  #muteBtn{position:absolute;bottom:10px;left:12px;
     pointer-events:auto;background:var(--panel);color:var(--ink);
     font-size:13px;padding:5px 12px;border-radius:999px;box-shadow:0 3px 0 rgba(0,0,0,.12);
     display:none;}
-  #muteBtn:active{transform:translateX(-50%) translateY(2px);box-shadow:none;}
+  #muteBtn:active{transform:translateY(2px);box-shadow:none;}
 </style>
 </head>
 <body>
@@ -81,8 +81,9 @@
     <div class="card">
       <h1>Maddie's <span>Treat Catch</span></h1>
       <div class="emoji-row">🐕🦴🍖🍪</div>
-      <p>Move <b>Maddie</b> to catch the falling treats!<br>
-         Watch out for the <b>bath stuff</b> 🧼🥾🚿 — she hates those.</p>
+      <p>Move <b>Maddie</b> to catch the treats and build combos!<br>
+         🥩 big points &nbsp;·&nbsp; ⭐ treat frenzy &nbsp;·&nbsp; 💖 extra life<br>
+         Dodge the <b>bath stuff</b> 🧼🥾🚿 — she hates those!</p>
       <p class="hint">Move: drag / mouse / ← → keys</p>
       <button id="playBtn">▶ Play</button>
     </div>
@@ -146,7 +147,10 @@
   let score = 0, lives = 3, best = 0;
   let items = [], sparkles = [];
   let spawnTimer = 0, spawnEvery = 0.9, fallBase = 150, elapsed = 0;
-  let maddie = { x: W/2, w: 92, h: 78, targetX: W/2 };
+  let combo = 0, bestCombo = 0, frenzy = 0, shake = 0, maxLives = 5;
+  let popups = [];
+  let maddie = { x: W/2, w: 92, h: 78, targetX: W/2, squash: 0 };
+  function comboMult(){ return Math.min(5, 1 + Math.floor(combo/6)); }
 
   try { best = parseInt(localStorage.getItem("maddieBest")||"0",10) || 0; } catch(e){ best = 0; }
 
@@ -165,28 +169,40 @@
 
   // ---------- Spawning ----------
   function spawnItem(){
-    const isBad = Math.random() < 0.26;
-    const emoji = isBad ? BAD[(Math.random()*BAD.length)|0] : GOOD[(Math.random()*GOOD.length)|0];
-    const size = 34 + Math.random()*10;
+    let kind, emoji, size = 34 + Math.random()*10;
+    const r = Math.random();
+    if(frenzy > 0){                                   // frenzy: only good, lots of steaks
+      if(r < 0.3){ kind="steak"; emoji="🥩"; size=44; }
+      else { kind="good"; emoji=GOOD[(Math.random()*GOOD.length)|0]; }
+    } else if(r < 0.23){ kind="bad";  emoji=BAD[(Math.random()*BAD.length)|0]; }
+      else if(r < 0.26 && lives < maxLives){ kind="heart"; emoji="💖"; size=40; }
+      else if(r < 0.30){ kind="star";  emoji="⭐"; size=46; }
+      else if(r < 0.38){ kind="steak"; emoji="🥩"; size=44; }
+      else { kind="good"; emoji=GOOD[(Math.random()*GOOD.length)|0]; }
     items.push({
       x: size + Math.random()*(W - size*2),
       y: -size,
-      vy: fallBase + Math.random()*60 + elapsed*7,
-      size, emoji, bad: isBad,
+      vy: fallBase + Math.random()*60 + elapsed*6 + (frenzy>0?40:0),
+      size, emoji, kind, bad: kind==="bad",
       rot: (Math.random()-0.5)*0.5, vr:(Math.random()-0.5)*1.2
     });
   }
-  function addSparkles(x, y, color){
-    for(let i=0;i<10;i++){
-      sparkles.push({ x, y, vx:(Math.random()-0.5)*220, vy:(Math.random()-0.9)*220,
+  function addSparkles(x, y, color, n){
+    n = n || 10;
+    for(let i=0;i<n;i++){
+      sparkles.push({ x, y, vx:(Math.random()-0.5)*240, vy:(Math.random()-0.9)*240,
         life:0.6, max:0.6, color });
     }
+  }
+  function addFloat(x, y, text, color){
+    popups.push({ x, y, text, color, life:0.95, max:0.95 });
   }
 
   // ---------- Update ----------
   function reset(){
-    score = 0; lives = 3; items = []; sparkles = [];
+    score = 0; lives = 3; items = []; sparkles = []; popups = [];
     spawnTimer = 0; spawnEvery = 0.9; elapsed = 0;
+    combo = 0; bestCombo = 0; frenzy = 0; shake = 0; maddie.squash = 0;
     maddie.x = maddie.targetX = W/2;
     updateHud();
   }
@@ -199,18 +215,23 @@
     elapsed += dt;
     // difficulty ramps up slowly
     spawnEvery = Math.max(0.42, 0.9 - elapsed*0.012);
+    // timers
+    if(frenzy > 0){ frenzy -= dt; if(frenzy < 0) frenzy = 0; }
+    if(shake > 0){ shake -= dt; if(shake < 0) shake = 0; }
+    if(maddie.squash > 0){ maddie.squash -= dt*4; if(maddie.squash < 0) maddie.squash = 0; }
 
     // keyboard movement
-    const kv = 420;
+    const kv = 440;
     if(keys["ArrowLeft"]||keys["a"]||keys["A"])  maddie.targetX -= kv*dt;
     if(keys["ArrowRight"]||keys["d"]||keys["D"]) maddie.targetX += kv*dt;
     maddie.targetX = Math.max(maddie.w/2, Math.min(W - maddie.w/2, maddie.targetX));
     // smooth follow
     maddie.x += (maddie.targetX - maddie.x) * Math.min(1, dt*14);
 
-    // spawn
+    // spawn (much faster during a frenzy)
+    const effSpawn = frenzy > 0 ? 0.17 : spawnEvery;
     spawnTimer += dt;
-    if(spawnTimer >= spawnEvery){ spawnTimer = 0; spawnItem(); }
+    if(spawnTimer >= effSpawn){ spawnTimer = 0; spawnItem(); }
 
     // catch line = top of Maddie's head
     const catchY = H - maddie.h - 24;
@@ -218,64 +239,122 @@
       const it = items[i];
       it.y += it.vy * dt;
       it.rot += it.vr * dt;
-      // collision with Maddie's mouth area
-      if(it.y + it.size*0.4 >= catchY && it.y - it.size*0.4 <= H - 24){
-        if(Math.abs(it.x - maddie.x) < maddie.w*0.52){
-          if(it.bad){ loseLife(); addSparkles(it.x,it.y,"#9fd0ff"); }
-          else { score++; updateHud(); sndCatch(); addSparkles(it.x,it.y,"#ffd23e");
-                 if(score>best){ best=score; try{localStorage.setItem("maddieBest",best);}catch(e){} updateHud(); } }
-          items.splice(i,1); continue;
+      // collision with Maddie's catch area
+      if(it.y + it.size*0.4 >= catchY && it.y - it.size*0.4 <= H - 24
+         && Math.abs(it.x - maddie.x) < maddie.w*0.52){
+        maddie.squash = 1; // happy hop
+        if(it.kind === "bad"){
+          combo = 0; shake = 0.35; loseLife();
+          addSparkles(it.x, it.y, "#9fd0ff", 8);
+          addFloat(it.x, it.y-12, "oops!", "#ff5a5a");
+        } else if(it.kind === "heart"){
+          if(lives < maxLives){ lives++; updateHud(); }
+          blip(880,0.12,"sine",0.1); setTimeout(()=>blip(1175,0.14,"sine",0.1),90);
+          addSparkles(it.x, it.y, "#ff7aa8", 14);
+          addFloat(it.x, it.y-12, "+1 life 💖", "#ff5a8a");
+        } else if(it.kind === "star"){
+          frenzy = 6; combo++; if(combo>bestCombo) bestCombo=combo;
+          sndCatch(); blip(660,0.1,"triangle",0.1); setTimeout(()=>blip(990,0.12,"triangle",0.1),90);
+          addSparkles(it.x, it.y, "#ffd23e", 20);
+          addFloat(it.x, it.y-12, "TREAT FRENZY!", "#ff9a1e");
+        } else {
+          combo++; if(combo>bestCombo) bestCombo=combo;
+          const base = (it.kind === "steak") ? 5 : 1;
+          const gained = base * comboMult() * (frenzy > 0 ? 2 : 1);
+          score += gained; sndCatch();
+          addSparkles(it.x, it.y, it.kind==="steak" ? "#ff9a3e" : "#ffd23e", it.kind==="steak"?16:10);
+          addFloat(it.x, it.y-12, "+"+gained, it.kind==="steak" ? "#ff7a2e" : "#3a9bff");
+          if(score > best){ best = score; try{localStorage.setItem("maddieBest",best);}catch(e){} }
+          updateHud();
         }
+        items.splice(i,1); continue;
       }
-      // off bottom
-      if(it.y - it.size > H){
-        items.splice(i,1);
-        if(!it.bad) { /* missing a treat is free — keep it chill */ }
-      }
+      // off the bottom (missing a plain treat is free — keep it chill)
+      if(it.y - it.size > H) items.splice(i,1);
     }
     // sparkles
     for(let i=sparkles.length-1;i>=0;i--){
       const s=sparkles[i]; s.life-=dt; s.x+=s.vx*dt; s.y+=s.vy*dt; s.vy+=600*dt;
       if(s.life<=0) sparkles.splice(i,1);
     }
+    // popups
+    for(let i=popups.length-1;i>=0;i--){
+      const p=popups[i]; p.life-=dt; p.y-=36*dt;
+      if(p.life<=0) popups.splice(i,1);
+    }
   }
 
   // ---------- Drawing ----------
-  let cloudOffset = 0;
-  function drawBackground(dt){
-    // sky
-    const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,"#8ec5ff"); g.addColorStop(.6,"#c8e9ff"); g.addColorStop(1,"#e9f6ff");
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    // clouds
-    cloudOffset += dt*14;
-    ctx.fillStyle="rgba(255,255,255,.8)";
-    const cw = W+160;
-    for(let i=0;i<3;i++){
-      const cx = ((i*180 - (cloudOffset % cw)) + cw) % cw - 80;
-      const cy = 70 + i*60;
-      cloud(cx, cy, 34 - i*4);
+  // ----- hot pink cheetah print background -----
+  let _seed = 20260930;
+  function srand(){ _seed = (_seed*1664525 + 1013904223) & 0x7fffffff; return _seed/0x7fffffff; }
+  const spots = [];
+  (function makeSpots(){
+    for(let gy=0; gy<10; gy++){
+      for(let gx=0; gx<6; gx++){
+        spots.push({
+          x:(gx+0.5)/6 + (srand()-0.5)*0.15,
+          y:(gy+0.5)/10 + (srand()-0.5)*0.12,
+          r: 13 + srand()*13,
+          rot: srand()*Math.PI*2,
+          solid: srand() < 0.3,
+          seed: srand(),
+          skip: srand() < 0.06
+        });
+      }
     }
-    // sun
-    ctx.save();
-    ctx.fillStyle="rgba(255,225,120,.9)";
-    ctx.beginPath(); ctx.arc(W-56,66,30,0,Math.PI*2); ctx.fill();
+  })();
+  // small irregular filled blob (organic, kidney-ish)
+  function blob(x,y,r,seed){
+    ctx.beginPath();
+    const n=8;
+    for(let i=0;i<=n;i++){
+      const a=(i/n)*Math.PI*2;
+      const wob=0.78 + 0.32*Math.sin(a*2 + seed*6.3);
+      const px=x+Math.cos(a)*r*wob, py=y+Math.sin(a)*r*0.72*wob;
+      if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+  // leopard rosette (a broken ring of organic dark petals) or a solid spot
+  function drawSpot(cx,cy,r,rot,solid,seed){
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
+    const dark="rgba(32,12,15,.86)";
+    if(solid){
+      ctx.fillStyle=dark; blob(0,0,r*0.44,seed);
+      ctx.restore(); return;
+    }
+    // tawny center
+    ctx.fillStyle="rgba(140,56,30,.22)";
+    ctx.beginPath(); ctx.ellipse(0,0,r*0.5,r*0.42,0,0,Math.PI*2); ctx.fill();
+    // ring of dark petals with one gap => broken rosette
+    ctx.fillStyle=dark;
+    const petals=5, gap=(seed*petals)|0;
+    for(let i=0;i<petals;i++){
+      if(i===gap) continue;
+      const a=(i/petals)*Math.PI*2;
+      const px=Math.cos(a)*r*0.9, py=Math.sin(a)*r*0.76;
+      const pr=r*(0.3 + ((i*7+seed*13)%10)/55);
+      ctx.save(); ctx.translate(px,py); ctx.rotate(a+1.1);
+      blob(0,0,pr,seed+i*0.37);
+      ctx.restore();
+    }
     ctx.restore();
-    // grass
+  }
+  function drawBackground(dt){
+    // hot pink base
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,"#ff92d2"); g.addColorStop(.5,"#ff4fa8"); g.addColorStop(1,"#ff2b90");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // cheetah spots across everything
+    for(const s of spots){ if(!s.skip) drawSpot(s.x*W, s.y*H, s.r, s.rot, s.solid, s.seed); }
+    // ground strip (deeper magenta) so Maddie has a floor
     const gh = maddie.h + 14;
     const gg = ctx.createLinearGradient(0,H-gh,0,H);
-    gg.addColorStop(0,"#8fd96a"); gg.addColorStop(1,"#5fae3c");
+    gg.addColorStop(0,"rgba(201,24,112,.5)"); gg.addColorStop(1,"rgba(140,8,74,.7)");
     ctx.fillStyle=gg; ctx.fillRect(0,H-gh,W,gh);
-    ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.lineWidth=2;
+    ctx.strokeStyle="rgba(255,255,255,.35)"; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(0,H-gh+2); ctx.lineTo(W,H-gh+2); ctx.stroke();
-  }
-  function cloud(x,y,r){
-    ctx.beginPath();
-    ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.arc(x+r,y+6,r*0.8,0,Math.PI*2);
-    ctx.arc(x-r,y+6,r*0.75,0,Math.PI*2);
-    ctx.arc(x+r*0.2,y-r*0.5,r*0.7,0,Math.PI*2);
-    ctx.fill();
   }
 
   // Draw Maddie — a mostly-white pit/beagle/boxer mix with chestnut-brown
@@ -288,6 +367,8 @@
     ctx.translate(cx, baseY);
     const bob = Math.sin(elapsed*6)*1.5;
     ctx.translate(0, bob);
+    const sq = maddie.squash || 0;               // happy hop on catch
+    ctx.scale(1 - sq*0.08, 1 + sq*0.15);
 
     const white="#f6efe4", whiteSh="#e3d9c9", brown="#a35d2e", brownD="#71401f",
           nose="#352420", tongue="#ff7183";
@@ -408,11 +489,46 @@
     ctx.globalAlpha = 1;
   }
 
+  function drawPopups(){
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.font="bold 20px 'Trebuchet MS',sans-serif";
+    for(const p of popups){
+      ctx.globalAlpha = Math.max(0, p.life/p.max);
+      ctx.lineWidth=3; ctx.strokeStyle="rgba(255,255,255,.85)";
+      ctx.strokeText(p.text, p.x, p.y);
+      ctx.fillStyle=p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha=1;
+  }
+  function drawComboBanner(){
+    if(state !== "play") return;
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    if(frenzy > 0){
+      const a = 0.65 + 0.35*Math.sin(elapsed*14);
+      ctx.font="bold 22px 'Trebuchet MS',sans-serif";
+      ctx.lineWidth=4; ctx.strokeStyle="#fff";
+      ctx.strokeText("🔥 TREAT FRENZY! 🔥", W/2, 112);
+      ctx.fillStyle="rgba(255,120,30,"+a+")";
+      ctx.fillText("🔥 TREAT FRENZY! 🔥", W/2, 112);
+    } else if(combo >= 3){
+      ctx.font="bold 18px 'Trebuchet MS',sans-serif";
+      ctx.lineWidth=3; ctx.strokeStyle="#fff";
+      const t = "Combo x"+comboMult()+"  ("+combo+")";
+      ctx.strokeText(t, W/2, 112);
+      ctx.fillStyle="#ff2e8e";
+      ctx.fillText(t, W/2, 112);
+    }
+  }
   function render(dt){
+    ctx.save();
+    if(shake > 0){ const s = shake*12; ctx.translate((Math.random()-0.5)*s, (Math.random()-0.5)*s); }
     drawBackground(dt);
     drawItems();
     drawMaddie(maddie.x);
     drawSparkles();
+    drawPopups();
+    drawComboBanner();
+    ctx.restore();
   }
 
   // ---------- Loop ----------
@@ -434,7 +550,7 @@
   function updateHud(){
     scoreEl.textContent = score;
     bestEl.textContent = best;
-    livesEl.textContent = "❤️".repeat(Math.max(0,lives)) + "🤍".repeat(Math.max(0,3-lives));
+    livesEl.textContent = "❤️".repeat(Math.max(0,lives)) + "🤍".repeat(Math.max(0,maxLives-lives));
   }
   function show(id){ document.getElementById(id).classList.remove("hidden"); }
   function hide(id){ document.getElementById(id).classList.add("hidden"); }
