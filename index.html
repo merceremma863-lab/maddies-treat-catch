@@ -280,8 +280,9 @@
     // smooth follow
     maddie.x += (maddie.targetX - maddie.x) * Math.min(1, dt*14);
 
-    // spawn (much faster during a frenzy)
-    const effSpawn = frenzy > 0 ? 0.17 : spawnEvery;
+    // spawn — faster in a frenzy, and a hot streak makes treats rain harder
+    const heat = Math.min(1, combo/40);
+    const effSpawn = (frenzy > 0 ? 0.17 : spawnEvery) * (1 - heat*0.4);
     spawnTimer += dt;
     if(spawnTimer >= effSpawn){ spawnTimer = 0; spawnItem(); }
 
