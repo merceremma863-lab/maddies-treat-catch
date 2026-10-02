@@ -113,8 +113,8 @@
       </div>
       <p class="hint" style="margin:10px 0 2px">Pick a mode:</p>
       <div class="modes">
-        <button class="modeBtn" data-mode="classic"><b>🐾 Classic</b><small>3 lives · endless</small></button>
-        <button class="modeBtn" data-mode="time"><b>⏱️ Time Attack</b><small>60-second rush</small></button>
+        <button class="modeBtn" data-mode="classic"><b>🐾 Classic</b><small>3 lives · don't miss!</small></button>
+        <button class="modeBtn" data-mode="time"><b>⏱️ Time Attack</b><small>60s · miss = -2s</small></button>
         <button class="modeBtn" data-mode="zen"><b>🧘 Zen</b><small>no fails, just vibe</small></button>
         <button class="modeBtn" data-mode="hard"><b>🔥 Hard</b><small>1 life · fast!</small></button>
       </div>
@@ -328,8 +328,27 @@
         }
         items.splice(i,1); continue;
       }
-      // off the bottom (missing a plain treat is free — keep it chill)
-      if(it.y - it.size > H) items.splice(i,1);
+      // off the bottom — missing a treat now matters!
+      if(it.y - it.size > H){
+        items.splice(i,1);
+        if(state === "play"){
+          combo = 0;                       // break the hot streak
+          if(cfg.timed > 0){
+            // Time Attack: a miss costs you 2 seconds
+            timeLeft = Math.max(0, timeLeft - 2); shake = 0.25; sndBad();
+            addFloat(it.x, H - maddie.h - 30, "missed! -2s", "#ff5a5a");
+            updateHud();
+          } else if(cfg.maxLives > 0){
+            // Classic / Hard: a miss costs a life
+            shake = 0.3;
+            addFloat(it.x, H - maddie.h - 30, "missed!", "#ff5a5a");
+            loseLife();
+            if(lives <= 0) return;
+          }
+          // Zen: no penalty — just the combo reset
+        }
+        continue;
+      }
     }
     // sparkles
     for(let i=sparkles.length-1;i>=0;i--){
